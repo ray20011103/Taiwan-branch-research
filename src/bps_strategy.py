@@ -3,8 +3,7 @@ import glob
 import os
 
 # Configuration
-STOCK_ID = '1536'  # Using the most active stock found: 1536 (和大?)
-LOOKBACK_DAYS = 7 # Shortened for recent data analysis
+LOOKBACK_DAYS = 60 # Adjusted to 60 days as per user request
 DATA_DIR = 'data/'
 PRICE_DB_PATH = 'data/stock_price_history.parquet'
 
@@ -16,7 +15,7 @@ def load_price_data(stock_id):
     
     try:
         df = pd.read_parquet(PRICE_DB_PATH)
-        df = df[df['stock_id'] == stock_id]
+        df = df[df['stock_id'] == str(stock_id)]
         return df
     except Exception as e:
         print(f"Error loading price data: {e}")
@@ -29,11 +28,8 @@ def load_data(stock_id):
         print(f"File not found: {file_path}")
         return pd.DataFrame()
 
-    print(f"Reading from {file_path}...")
+    print(f"Reading from {file_path} for {stock_id}...")
     try:
-        # Optimization: Use pyarrow filters to load only what we need if possible,
-        # but for simplicity and since the file is 239MB, loading it is okay.
-        # However, let's use the columns mapping from the Parquet file to our standard names.
         df = pd.read_parquet(file_path, filters=[('CommodityId', '==', str(stock_id))])
         
         if df.empty:
@@ -64,78 +60,70 @@ def calculate_bps(df, price_df):
     """
     Calculates Broker Profitability Score (BPS).
     """
+    if df.empty: return pd.DataFrame()
     
     # Sort by date
     df = df.sort_values('date')
     dates = sorted(df['date'].unique())
+    stock_id = df['stock_id'].iloc[0]
     
     # Create a map for fast price lookup: date -> close_price
     price_map = {}
     if not price_df.empty:
         price_map = price_df.set_index('date')['close'].to_dict()
+        # Convert index dates to string for matching if necessary
+        price_map = {str(k).split('T')[0]: v for k, v in price_map.items()}
     
     # State tracking
-    # broker_id -> {'qty': 0, 'avg_cost': 0, 'realized_pnl': 0}
     broker_state = {}
-    
     results = []
 
-    print(f"Simulating BPS for {STOCK_ID} over {len(dates)} days (Lookback={LOOKBACK_DAYS})...")
+    print(f"Simulating BPS for {stock_id} over {len(dates)} days...")
 
     for current_date in dates:
         daily_tx = df[df['date'] == current_date]
         
         # 1. Determine Current Price for Valuation
-        # Prefer OHLCV close, fallback to weighted avg from transactions
-        if current_date in price_map:
-            current_price = price_map[current_date]
+        curr_date_str = str(current_date).split(' ')[0]
+        if curr_date_str in price_map:
+            current_price = price_map[curr_date_str]
         else:
             total_vol = daily_tx['buy'].sum() + daily_tx['sell'].sum()
             total_amt = (daily_tx['price'] * (daily_tx['buy'] + daily_tx['sell'])).sum()
             current_price = total_amt / total_vol if total_vol > 0 else 0
         
-        # 2. Calculate Daily Net Buy for all brokers (to identify winners' actions)
+        # 2. Calculate Daily Net Buy
         daily_summary = daily_tx.groupby('securities_trader_id')[['buy', 'sell', 'price']].apply(
             lambda x: pd.Series({
                 'net_buy_qty': x['buy'].sum() - x['sell'].sum(),
-                # Approx avg price for this broker today
                 'avg_price': (x['price'] * (x['buy'] + x['sell'])).sum() / (x['buy'] + x['sell']).sum() if (x['buy'] + x['sell']).sum() > 0 else 0
-            })
+            }),
+            include_groups=False
         ).reset_index()
         
-        # 3. Calculate Historical Performance (State BEFORE today's action)
-        # Identify who WAS winning up to yesterday.
-        
+        # 3. Calculate Historical Performance (BEFORE today)
         broker_pnls = []
         for bid, state in broker_state.items():
-            # Mark-to-Market PnL
             unrealized = (current_price - state['avg_cost']) * state['qty']
             total_pnl = state['realized_pnl'] + unrealized
             broker_pnls.append({'securities_trader_id': bid, 'total_pnl': total_pnl})
         
         df_pnl = pd.DataFrame(broker_pnls)
-        
         top_winners_net_buy = 0
-        top_winners = []
         
         if not df_pnl.empty:
-            # Rank and Pick Top 5
             df_pnl = df_pnl.sort_values('total_pnl', ascending=False)
             top_5_ids = df_pnl.head(5)['securities_trader_id'].tolist()
-            top_winners = top_5_ids
-            
-            # Calculate their action TODAY
             winners_today = daily_summary[daily_summary['securities_trader_id'].isin(top_5_ids)]
             top_winners_net_buy = winners_today['net_buy_qty'].sum()
             
         results.append({
             'date': current_date,
             'price': current_price,
-            'bps_factor': top_winners_net_buy,
-            'top_winners': top_winners
+            'bps_factor': top_winners_net_buy
         })
 
-        # 4. Update State for Tomorrow (incorporating today's trades)
+        # 4. Update State
         for idx, row in daily_summary.iterrows():
             bid = row['securities_trader_id']
             net_qty = row['net_buy_qty']
@@ -145,32 +133,18 @@ def calculate_bps(df, price_df):
                 broker_state[bid] = {'qty': 0, 'avg_cost': 0, 'realized_pnl': 0}
             
             st = broker_state[bid]
-            
-            # Update logic (Weighted Avg Cost)
             if net_qty > 0:
-                # Buying: Update avg cost
                 new_cost = (st['qty'] * st['avg_cost'] + net_qty * avg_p) / (st['qty'] + net_qty)
                 st['qty'] += net_qty
                 st['avg_cost'] = new_cost
             elif net_qty < 0:
-                # Selling: Realize PnL
                 sell_qty = abs(net_qty)
                 if st['qty'] > 0:
-                    # Profit = (Sell Price - Avg Cost) * Qty
                     profit = (avg_p - st['avg_cost']) * min(sell_qty, st['qty'])
                     st['realized_pnl'] += profit
                     st['qty'] = max(0, st['qty'] - sell_qty)
-                else:
-                    # Short selling (simplified: ignore realized pnl or treat as 0 cost)
-                    pass
-                
-                # Decay Realized PnL?
-                # The "Lookback" concept usually implies we only care about PnL made in the last N days.
-                # Implementing a strict "Rolling Window PnL" is complex because we need to track PnL per day.
-                # For this MVP, we accumulate PnL indefinitely but rely on the fact that 
-                # we started from zero in Jan 2025, so it's naturally "recent".
-                # To strictly follow "Lookback 60 days", we would need a queue of daily PnLs.
-                # Given we only have ~30 days of data, simple accumulation is fine.
+
+    return pd.DataFrame(results)
 
     return pd.DataFrame(results)
 
