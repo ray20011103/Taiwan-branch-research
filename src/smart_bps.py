@@ -7,7 +7,7 @@ from src.batch_clustering import identify_accumulator_cluster
 
 def run_smart_bps(stock_id):
     print(f"\n{'='*40}")
-    print(f"🚀 Running SMART BPS for Stock: {stock_id}")
+    print(f" Running SMART BPS for Stock: {stock_id}")
     print(f"{'='*40}")
 
     # 1. Step 1: Run Clustering to find the 'Smart' brokers

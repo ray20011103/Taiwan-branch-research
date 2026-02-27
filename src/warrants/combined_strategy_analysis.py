@@ -5,7 +5,7 @@ from scipy import stats
 import numpy as np
 
 def run_combined_analysis():
-    print("--- 🧠 Combined Strategy: Smart BPS + Warrant Hedging (Significance Test) ---")
+    print("--- Combined Strategy: Smart BPS + Warrant Hedging (Significance Test) ---")
     
     # 1. Load Data
     warrant_report_path = 'data/collective_warrant_impact_report.csv'
@@ -49,6 +49,14 @@ def run_combined_analysis():
     # Merge Market Index
     combined = pd.merge(combined, mkt_df, on='date', how='left')
     
+    # [New] Exclude Extreme Market Event: Trump Tariff Release (April 2025)
+    # Removing April 7 to April 15 to focus on normal regimes
+    exclude_start = '2025-04-07'
+    exclude_end = '2025-04-15'
+    before_count = len(combined)
+    combined = combined[~combined['date'].between(exclude_start, exclude_end)]
+    print(f"Excluded {before_count - len(combined)} rows during the April 2025 extreme event period.")
+    
     # 2. Define Signals & Target (ALPHA BASED)
     combined['alpha_ret'] = combined['stock_ret'] - combined['mkt_ret']
     
@@ -86,12 +94,12 @@ def run_combined_analysis():
         get_stats(group_both, 'Both (Synergy)')
     ]
     
-    print("\n--- 📊 Performance Summary (Market Alpha Based) ---")
+    print("\n--- Performance Summary (Market Alpha Based) ---")
     summary_df = pd.DataFrame(results)
     print(summary_df.to_string(index=False))
     
     # 5. T-Tests for Significance
-    print("\n--- ⚖️ Statistical Significance Tests (P-Values) ---")
+    print("\n--- Statistical Significance Tests (P-Values) ---")
     if len(group_both) > 5 and len(group_none) > 5:
         t_stat, p_val = stats.ttest_ind(group_both, group_none, equal_var=False)
         print(f"1. Both vs None (Alpha):    P-Value = {p_val:.4f} {'(SIGNIFICANT)' if p_val < 0.05 else '(Not Significant)'}")
@@ -102,7 +110,7 @@ def run_combined_analysis():
         print("Sample size still too low for reliable T-Test.")
 
     # 6. Conclusion
-    print("\n--- 📝 Final Verdict ---")
+    print("\n--- Final Verdict ---")
     if not summary_df.empty:
         best_signal = summary_df.loc[summary_df['Alpha_Sharpe'].idxmax(), 'Signal']
         print(f"Best Risk-Adjusted Signal: {best_signal}")

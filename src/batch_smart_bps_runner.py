@@ -8,7 +8,7 @@ sys.path.append(os.getcwd())
 from src.smart_bps import run_smart_bps
 
 def batch_process_top_stocks():
-    print("--- 🏭 Batch Processing Smart BPS for Top 50 Stocks ---")
+    print("---  Batch Processing Smart BPS for Top 50 Stocks ---")
     
     stock_history_path = 'data/stock_price_history.parquet'
     if not os.path.exists(stock_history_path):

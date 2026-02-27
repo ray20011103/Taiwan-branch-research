@@ -4,7 +4,7 @@ import glob
 from datetime import datetime
 
 def run_batch_alpha_analysis():
-    print("--- 🚀 Refined Batch Alpha Analysis (Target: Jan 2025 Announcements) ---")
+    print("---  Refined Batch Alpha Analysis (Target: Jan 2025 Announcements) ---")
     
     # 1. Load Core Data
     if not os.path.exists('data/stock_price_history.parquet'):
@@ -97,7 +97,7 @@ def run_batch_alpha_analysis():
     # 4. Final Report
     report_df = pd.DataFrame(results).sort_values('T-5 to T-0 Alpha%', ascending=False)
     
-    print("\n--- 📊 Refined Alpha Report (Jan 2025) ---")
+    print("\n---  Refined Alpha Report (Jan 2025) ---")
     print(report_df.to_string(index=False))
     
     # Save Report

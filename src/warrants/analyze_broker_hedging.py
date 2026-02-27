@@ -2,7 +2,7 @@ import pandas as pd
 import os
 
 def analyze_warrant_hedging_impact():
-    print("--- 🛡️ Warrant Hedging & Market Impact Analysis (Full Period 2025) ---")
+    print("--- ️ Warrant Hedging & Market Impact Analysis (Full Period 2025) ---")
     
     # 1. Load Data
     warrant_trades_path = 'data/分點進出.parquet'

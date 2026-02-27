@@ -19,7 +19,7 @@ def load_portfolio():
 
 def generate_daily_report(today_date):
     print(f"\n{'='*50}")
-    print(f"📡 DAILY SIGNAL REPORT (Simulated Date: {today_date})")
+    print(f" DAILY SIGNAL REPORT (Simulated Date: {today_date})")
     print(f"{'='*50}\n")
     
     portfolio = load_portfolio()
@@ -106,14 +106,14 @@ def generate_daily_report(today_date):
 
     # 3. PRINT FINAL ACTION PLAN
     print("\n" + "="*50)
-    print("📋 ACTION PLAN FOR TOMORROW")
+    print(" ACTION PLAN FOR TOMORROW")
     print("="*50)
     
     if not action_plan:
         print("No actions required.")
     else:
         for item in action_plan:
-            icon = "🟢" if item['action'] == 'BUY' else "🔴"
+            icon = "" if item['action'] == 'BUY' else ""
             print(f"{icon} {item['action']} {item['stock_id']} @ {item['price']}")
             print(f"   Reason: {item['reason']}")
             print("-" * 30)
