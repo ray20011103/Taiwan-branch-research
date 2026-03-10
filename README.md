@@ -81,4 +81,4 @@ Alpha 分佈展現出明顯的正偏態 (Positive Skew)。止損機制有效截�
 本研究成功定義了台股營收前瞻 Alpha 策略的量化邊界。透過 PCA+K-Means 的嚴謹分群與多重風控，證明了台股籌碼細節中隱含的巨大非對稱資訊價值。
 
 ---
-Managed by **Gemini CLI** | 2026-03-09
+Managed by Ray| 2026-03-10
